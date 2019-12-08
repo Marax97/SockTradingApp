@@ -1,17 +1,12 @@
-import os
-import sys
 from datetime import datetime
 
 import yfinance as yf
-import pandas as pd
-import numpy as numpy
-import matplotlib.pyplot as plt
-import matplotlib as mpl
 from dateutil.relativedelta import relativedelta
 from ta import *
+from utils import get_file_path
 
-symbolsFile = "./resources/symbols.csv"
-storePricesDirectory = "./resources/stockPricesWithIndicators/"
+symbolsFile = "\\resources\\symbols.csv"
+storePricesDirectory = "\\resources\\stockPricesWithIndicators\\"
 
 def fetchStockPrices():
     symbols = getOnlySymbolsFromCsv()
@@ -25,10 +20,10 @@ def fetchStockPrices():
 
 
 def savePricesToCSV(data, symbol):
-    data.to_csv(storePricesDirectory + symbol + '.csv', header=True)
+    data.to_csv(get_file_path(storePricesDirectory + symbol + '.csv'), header=True)
 
 def getOnlySymbolsFromCsv():
-    df = pd.read_csv(symbolsFile, sep='\s*,\s*', engine='python')
+    df = pd.read_csv(get_file_path(symbolsFile), sep='\s*,\s*', engine='python')
     return df['Symbol'].astype(str).values.tolist()
 
 
