@@ -17,6 +17,6 @@ def normalize_data(train_data, test_data):
     return train_scaled, test_scaled
 
 
-def preprocess_data(dataFrame, split_percent):
-    train, test = split_data(dataFrame, split_percent)
+def preprocess_data(dataframe, split_percent):
+    train, test = split_data(dataframe, split_percent)
     return normalize_data(train, test)
