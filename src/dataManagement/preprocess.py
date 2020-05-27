@@ -1,4 +1,5 @@
-from sklearn.preprocessing import MinMaxScaler
+def remove_dataframe_rows(dataframe, from_index, to_index):
+    dataframe.drop(dataframe.index[from_index:to_index])
 
 
 def split_array(array, percentage):
@@ -10,13 +11,12 @@ def split_data(dataFrame, percentage):
     return split_array(dataFrame.values, percentage)
 
 
-def normalize_data(train_data, test_data):
-    scaler = MinMaxScaler()
+def normalize_data(train_data, test_data, scaler):
     train_scaled = scaler.fit_transform(train_data)
     test_scaled = scaler.transform(test_data)
     return train_scaled, test_scaled
 
 
-def preprocess_data(dataframe, split_percent):
+def preprocess_data(dataframe, split_percent, scaler):
     train, test = split_data(dataframe, split_percent)
-    return normalize_data(train, test)
+    return normalize_data(train, test, scaler)
