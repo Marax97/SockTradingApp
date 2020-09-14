@@ -22,14 +22,15 @@ class DirectionalMeanSquaredError(tf.keras.losses.Loss):
 
         y_true = y_true[:, self.passed_days:]
 
-        loss = math_ops.squared_difference(y_pred, y_true)
+        loss = math_ops.abs((y_pred - y_true) / K.maximum(math_ops.abs(y_true), K.epsilon()))
+        # loss = math_ops.squared_difference(y_pred, y_true)
         loss = loss * directions
 
         return K.mean(loss, axis=-1)
 
     def fillDirections(self, y_true, y_pred):
         directions = list()
-        stop = (self.passed_days + 1) / 7
+        stop = (self.passed_days + 1) / 28
         x = K.arange(0, stop, stop / (self.passed_days + 1), dtype=tf.float32)
         xm = K.mean(x, axis=0)
 

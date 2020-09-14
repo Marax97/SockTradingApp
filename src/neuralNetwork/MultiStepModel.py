@@ -19,30 +19,29 @@ TRAIN_COLUMNS_SIZE = 13
 TARGET_COLUMNS = ['Adj Close']
 SPLIT_PERCENT = 0.85
 
-TRAIN_SAMPLES = 80000
-TEST_SAMPLES = 30000
-VALIDATION_SAMPLES = 26000
+TRAIN_SAMPLES = 50000
+TEST_SAMPLES = 10000
+VALIDATION_SAMPLES = 8500
 
 BATCH_SIZE = 400  # liczba prób par (BUFFER_SIZE, BUFFER_SIZE)
-VALIDATION_BATCH_SIZE = 150
-BUFFER_SIZE = 40  # liczba dni znanych (do predykcji)
-EPOCHS = 50
+BUFFER_SIZE = 30  # liczba dni znanych (do predykcji)
+EPOCHS = 200
 DAYS_TO_PREDICT = 4
 
 CALLBACKS = [
     tf.keras.callbacks.EarlyStopping(monitor='val_loss',
-                                     min_delta=1e-4,
-                                     patience=5,
+                                     min_delta=1e-3,
+                                     patience=12,
                                      verbose=1),
 
     tf.keras.callbacks.TensorBoard(log_dir=utils.get_file_path('\\resources\\logs')),
 
-    # tf.keras.callbacks.ModelCheckpoint(filepath=utils.get_file_path(CHECKPOINT_PATH),
-    #                                    save_weights_only=True,
-    #                                    save_best_only=True,
-    #                                    monitor='val_loss',
-    #                                    mode='min',
-    #                                    verbose=1)
+    tf.keras.callbacks.ModelCheckpoint(filepath=utils.get_file_path(CHECKPOINT_PATH),
+                                       save_weights_only=True,
+                                       save_best_only=True,
+                                       monitor='val_loss',
+                                       mode='min',
+                                       verbose=0)
 
 ]
 
@@ -91,8 +90,8 @@ def separate_validation_set(train_set):
 
 
 def generate_random_samples(x_set, y_set, number_of_samples=TRAIN_SAMPLES, buffer_size=BUFFER_SIZE):
-    x_batches_set = numpy.zeros(shape=(number_of_samples, BUFFER_SIZE, TRAIN_COLUMNS_SIZE), dtype=numpy.float32)
-    y_batches_set = numpy.zeros(shape=(number_of_samples, DAYS_TO_PREDICT + 6, len(TARGET_COLUMNS)),
+    x_batches_set = numpy.zeros(shape=(number_of_samples, buffer_size, TRAIN_COLUMNS_SIZE), dtype=numpy.float32)
+    y_batches_set = numpy.zeros(shape=(number_of_samples, DAYS_TO_PREDICT, len(TARGET_COLUMNS)),
                                 dtype=numpy.float32)
 
     for i in range(number_of_samples):
@@ -100,31 +99,28 @@ def generate_random_samples(x_set, y_set, number_of_samples=TRAIN_SAMPLES, buffe
         random_pos = numpy.random.randint(len(x_set[random_index]) - buffer_size)
         x_batches_set[i] = x_set[random_index][random_pos: random_pos + buffer_size]
         y_batches_set[i] = y_set[random_index][
-                           random_pos + buffer_size - DAYS_TO_PREDICT - 6: random_pos + buffer_size]
+                           random_pos + buffer_size - DAYS_TO_PREDICT: random_pos + buffer_size]
 
     return x_batches_set, y_batches_set
 
 
 def create_model(x_batches_set, y_batches_set, validation_data):
     network_model = tf.keras.models.Sequential([
-        tf.keras.layers.LSTM(TRAIN_COLUMNS_SIZE, return_sequences=True, input_shape=(BUFFER_SIZE, TRAIN_COLUMNS_SIZE)),
-        tf.keras.layers.Dropout(0.2),
-        tf.keras.layers.LSTM(TRAIN_COLUMNS_SIZE * 2, return_sequences=True),
-        tf.keras.layers.LSTM(2 * DAYS_TO_PREDICT + 1),
-        tf.keras.layers.Dropout(0.2),
-        tf.keras.layers.Dense(y_batches_set.shape[2] * DAYS_TO_PREDICT),
-        tf.keras.layers.Reshape([y_batches_set.shape[2] * DAYS_TO_PREDICT, len(TARGET_COLUMNS)])
+        tf.keras.layers.LSTM(30, input_shape=(BUFFER_SIZE, TRAIN_COLUMNS_SIZE)),
+        # tf.keras.layers.Dropout(0.2),
+        # tf.keras.layers.LSTM(20),
+        # tf.keras.layers.Dropout(0.5),
+        tf.keras.layers.Dense(DAYS_TO_PREDICT),
+        tf.keras.layers.Reshape([DAYS_TO_PREDICT, len(TARGET_COLUMNS)])
     ])
 
-    network_model.compile(optimizer=tf.keras.optimizers.Adam(),
-                          loss=DirectionalMeanSquaredError())
+    network_model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.001),
+                          loss="mse")
 
-    learning_history = network_model.fit(x=x_batches_set, y=y_batches_set, epochs=EPOCHS, batch_size=BATCH_SIZE,
-                                         validation_data=validation_data, validation_batch_size=VALIDATION_BATCH_SIZE,
-                                         steps_per_epoch=BATCH_SIZE, validation_steps=VALIDATION_BATCH_SIZE,
-                                         callbacks=CALLBACKS)
+    learning_history = network_model.fit(x=x_batches_set, y=y_batches_set, epochs=EPOCHS, steps_per_epoch=BATCH_SIZE,
+                                         validation_data=validation_data, callbacks=CALLBACKS)
 
-    # network_model.load_weights(utils.get_file_path(CHECKPOINT_PATH))
+    network_model.load_weights(utils.get_file_path(CHECKPOINT_PATH))
 
     return network_model, learning_history
 
@@ -144,13 +140,13 @@ def plot_train_history(history, title):
 
 
 def save_model():
-    score = model.evaluate(x_test_batches, y_test_batches, verbose=2)
+    score = model.evaluate(x_test_batches, y_test_batches, verbose=2, batch_size=TEST_SAMPLES)
     savedScore = None
     if len(utils.get_files_in_directory(ENTIRE_MODEL_PATH)):
         savedModel = tf.keras.models.load_model(utils.get_file_path(ENTIRE_MODEL_PATH),
                                                 custom_objects={'loss': DirectionalMeanSquaredError()}, compile=False)
         savedModel.compile(optimizer=tf.keras.optimizers.Adam(), loss=DirectionalMeanSquaredError())
-        savedScore = savedModel.evaluate(x_test_batches, y_test_batches, verbose=0)
+        savedScore = savedModel.evaluate(x_test_batches, y_test_batches, verbose=0, batch_size=TEST_SAMPLES)
         if savedScore < score:
             print("Model did not improve on test set. Best score was {} but model get {}".format(savedScore, score))
             return
@@ -158,6 +154,19 @@ def save_model():
     dump(train_scaler, open(utils.get_file_path(SCALER_TRAIN_PATH), 'wb'))
     dump(test_scaler, open(utils.get_file_path(SCALER_TEST_PATH), 'wb'))
     print("New model was saved due to improve on test set from {} to {}".format(savedScore, score))
+
+
+SAVED_MODEL = '\\resources\\logs\\savedModel\\{}\\savedModel'
+SAVED_MODEL_DIR_NAMES = ["1_LSTM_NEW", "1_LSTM_D_DR_NEW", "2_LSTM", "2_LSTM_2D_2DR_NEW"]
+
+
+def test_models():
+    for i in SAVED_MODEL_DIR_NAMES:
+        print("\n######### Testing saved model {} ##########".format(i))
+        savedModel = tf.keras.models.load_model(utils.get_file_path(SAVED_MODEL.format(i)),
+                                                custom_objects={'loss': DirectionalMeanSquaredError()}, compile=False)
+        savedModel.compile(optimizer=tf.keras.optimizers.Adam(), loss=DirectionalMeanSquaredError())
+        savedScore = savedModel.evaluate(x_test_batches, y_test_batches, verbose=1, batch_size=TEST_SAMPLES)
 
 
 if __name__ == "__main__":
@@ -177,12 +186,14 @@ if __name__ == "__main__":
                                                                            test_scaler)
 
     x_train_batches, y_train_batches = generate_random_samples(x_train_set, y_train_set)
-    x_test_batches, y_test_batches = generate_random_samples(x_test_set, y_test_set, TRAIN_SAMPLES)
+    x_test_batches, y_test_batches = generate_random_samples(x_test_set, y_test_set, TEST_SAMPLES)
     x_val_batches, y_val_batches = generate_random_samples(x_val_set, y_val_set, VALIDATION_SAMPLES)
 
     validation_data = (x_val_batches, y_val_batches)
     model, history = create_model(x_train_batches, y_train_batches, validation_data)
 
-    plot_train_history(history, "Train and validation error")
-    print(model.summary())
     save_model()
+    plot_train_history(history, "Train and validation error")
+    # print(model.summary())
+
+    # test_models()

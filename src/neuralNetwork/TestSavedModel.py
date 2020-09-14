@@ -25,6 +25,7 @@ SCALER_TEST_PATH = '\\resources\\savedModel\\scalers\\ScalerTest.pkl'
 
 INDEXES_DIRECTORY = "\\resources\\stockPricesWithIndicators\\"
 SELECTED_COLUMNS = "\\resources\\SelectedColumns.csv"
+SYMBOLS_FILE = "\\resources\\symbols.csv"
 
 TARGET_COLUMN = ['Adj Close']
 
@@ -92,9 +93,9 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def on_predict(self):
         selected_day = self.date_calendar.date().toString("yyyy-MM-dd")
-        selected_index = self.indexes.get(self.index_combo.currentText())
+        selected_index = self.indexes.get(self.index_combo.currentText().split(" - ")[1])
         datetime.strptime(selected_day, "%Y-%m-%d")
-        past_days = selected_index[:selected_day].iloc[-40:]
+        past_days = selected_index[:selected_day].iloc[-30:]
         future_days = selected_index[selected_day:].iloc[:5]
 
         prediction = self.model.predict(numpy.array([scaler_train.transform(past_days)]))[0]
@@ -114,9 +115,12 @@ class MainWindow(QtWidgets.QMainWindow):
         self.index_label.setText("Select index: ")
         gridLayout.addWidget(self.index_label, 1, 1)
         self.index_combo = QtWidgets.QComboBox(self)
-        self.index_combo.addItems(indexes.keys())
+        self.index_combo.addItems(symbols.apply(
+            lambda x: ' - '.join(x.dropna().astype(str)),
+            axis=1
+        ))
         gridLayout.addWidget(self.index_combo, 1, 2)
-
+        symbols
         self.date_label = QtWidgets.QLabel(self)
         self.date_label.setText("Select date: ")
         gridLayout.addWidget(self.date_label, 2, 1)
@@ -148,6 +152,7 @@ if __name__ == "__main__":
     scaler_train = load(open(get_file_path(SCALER_TRAIN_PATH), 'rb'))
     scaler_test = load(open(get_file_path(SCALER_TEST_PATH), 'rb'))
     all_indexes = read_indexes_prices()
+    symbols = pd.read_csv(utils.get_file_path(SYMBOLS_FILE), sep='\s*,\s*', engine='python')
 
     app = QtWidgets.QApplication(sys.argv)
     w = MainWindow(all_indexes, model)
